@@ -6,3 +6,16 @@
 .login {
     float:right
 }
+
+.breadcrumb {
+    background-color: #f8b52a !important;
+}
+
+.breadcrumb i {
+    color:  black !important;
+}
+
+.title {
+    text-align: center;
+    font-weight: 600;
+}
