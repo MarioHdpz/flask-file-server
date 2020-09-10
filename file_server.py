@@ -12,10 +12,11 @@ import sys
 from pathlib2 import Path
 
 app = Flask(__name__, static_url_path='/assets', static_folder='assets')
-print(Path().absolute())
 
 root = os.path.normpath(str(Path().absolute()) + "/tmp")
 key = ""
+
+range_re = re.compile(r'bytes\s*=\s*(\d+)\s*-\s*(\d*)', re.I)
 
 ignored = ['.bzr', '$RECYCLE.BIN', '.DAV', '.DS_Store', '.git', '.hg', '.htaccess', '.htpasswd', '.Spotlight-V100', '.svn', '__MACOSX', 'ehthumbs.db', 'robots.txt', 'Thumbs.db', 'thumbs.tps']
 datatypes = {'audio': 'm4a,mp3,oga,ogg,webma,wav', 'archive': '7z,zip,rar,gz,tar', 'image': 'gif,ico,jpe,jpeg,jpg,png,svg,webp', 'pdf': 'pdf', 'quicktime': '3g2,3gp,3gp2,3gpp,mov,qt', 'source': 'atom,bat,bash,c,cmd,coffee,css,hml,js,json,java,less,markdown,md,php,pl,py,rb,rss,sass,scpt,swift,scss,sh,xml,yml,plist', 'text': 'txt', 'video': 'mp4,m4v,ogv,webm', 'website': 'htm,html,mhtm,mhtml,xhtm,xhtml'}
@@ -88,16 +89,18 @@ def partial_response(path, start, end=None):
     )
     return response
 
-def get_range(request):
-    range = request.headers.get('Range')
-    m = re.match('bytes=(?P<start>\d+)-(?P<end>\d+)?', range)
+def get_range(request, path):
+    range_header = request.headers.get('Range')
+    m = range_re.match(range_header)
+    size = os.path.getsize(path)
     if m:
-        start = m.group('start')
-        end = m.group('end')
-        start = int(start)
-        if end is not None:
-            end = int(end)
-        return start, end
+        first_byte, last_byte = m.groups()
+        first_byte = int(first_byte) if first_byte else 0
+        last_byte = int(last_byte) if last_byte else size - 1
+        if last_byte >= size:
+            last_byte = size - 1
+        length = last_byte - first_byte + 1
+        return first_byte, last_byte
     else:
         return 0, None
 
@@ -132,7 +135,7 @@ class PathView(MethodView):
             res.set_cookie('hide-dotfile', hide_dotfile, max_age=16070400)
         elif os.path.isfile(path):
             if 'Range' in request.headers:
-                start, end = get_range(request)
+                start, end = get_range(request, path)
                 res = partial_response(path, start, end)
             else:
                 res = send_file(path)
@@ -243,4 +246,4 @@ if __name__ == '__main__':
     port = os.getenv('FS_PORT', '8000')
     root = os.path.normpath(os.getenv('FS_PATH', str(Path().absolute()) + "/tmp"))
     key = os.getenv('FS_KEY')
-    app.run(bind, port, threaded=True, debug=False)
+    app.run(bind, port, threaded=True, debug=True)
